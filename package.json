@@ -1,0 +1,47 @@
+{
+  "name": "mcp-google-gemini-image-generation",
+  "version": "1.0.0",
+  "description": "MCP server for generating images with Google's Gemini API",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-gemini-image": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gyuha/mcp-google-gemini-image-generation.git"
+  },
+  "keywords": [
+    "mcp",
+    "gemini",
+    "image-generation",
+    "ai"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gyuha/mcp-google-gemini-image-generation/issues"
+  },
+  "homepage": "https://github.com/gyuha/mcp-google-gemini-image-generation#readme",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "dotenv": "^16.5.0",
+    "fs-extra": "^11.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.17.46"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "type": "module"
+}

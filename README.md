@@ -1,0 +1,143 @@
+# MCP Google Gemini Image Generation
+
+A Model Context Protocol (MCP) server that uses Google's Gemini API to generate images from text prompts.
+
+## Features
+
+- Generate images using Google's Gemini AI models
+- Select from different Gemini models (default: `gemini-2.0-flash-001`)
+- Customize image dimensions
+- Save generated images to a specified directory
+- Access via MCP protocol
+- Easy to run with NPX
+
+## Installation
+
+You can run this package directly with npx:
+
+```bash
+npx mcp-google-gemini-image-generation
+```
+
+Or install it globally:
+
+```bash
+npm install -g mcp-google-gemini-image-generation
+mcp-gemini-image
+```
+
+## Prerequisites
+
+- Node.js 16 or higher
+- Google API key with access to Gemini API
+
+## Configuration
+
+Set your Google API key using one of these methods:
+
+1. Environment variable:
+```bash
+export GOOGLE_API_KEY=your_google_api_key_here
+```
+
+2. Create a .env file:
+```
+GOOGLE_API_KEY=your_google_api_key_here
+```
+
+3. Pass as a command line argument:
+```bash
+npx mcp-google-gemini-image-generation --api-key=your_google_api_key_here
+```
+
+## Command Line Options
+
+```
+Options:
+  -V, --version           output the version number
+  -p, --port <number>     Port number for the MCP server (default: "3000")
+  -h, --host <host>       Host for the MCP server (default: "localhost")
+  -o, --output <directory> Directory for saving generated images (default: "./generated-images")
+  -k, --api-key <key>     Google API key (or set GOOGLE_API_KEY env variable)
+  --help                  display help for command
+```
+
+## MCP Protocol Usage
+
+Send MCP requests to the server's HTTP endpoint:
+
+### Get Model Properties
+
+```json
+{
+  "lookup": "properties"
+}
+```
+
+### Generate an Image
+
+```json
+{
+  "call": {
+    "context": {
+      "prompt": "a beautiful landscape with mountains and a lake",
+      "model": "gemini-2.0-flash-001",
+      "width": 1024,
+      "height": 1024
+    }
+  }
+}
+```
+
+### Available Context Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| prompt | string | *required* | Text prompt describing the image to generate |
+| model | string | "gemini-2.0-flash-001" | Gemini model to use |
+| width | number | 1024 | Image width in pixels |
+| height | number | 1024 | Image height in pixels |
+| outputDir | string | "./generated-images" | Directory to save images |
+
+## Example Usage with cURL
+
+```bash
+# Get model properties
+curl -X POST http://localhost:3000 \
+  -H "Content-Type: application/json" \
+  -d '{"lookup": "properties"}'
+
+# Generate an image
+curl -X POST http://localhost:3000 \
+  -H "Content-Type: application/json" \
+  -d '{"call": {"context": {"prompt": "a beautiful landscape with mountains and a lake"}}}'
+```
+
+## Response Format
+
+A successful image generation request will return:
+
+```json
+{
+  "result": {
+    "success": true,
+    "message": "Image generated successfully",
+    "imagePath": "/path/to/generated/image.png"
+  }
+}
+```
+
+An error response will return:
+
+```json
+{
+  "result": {
+    "success": false,
+    "error": "Error message details"
+  }
+}
+```
+
+## License
+
+ISC
