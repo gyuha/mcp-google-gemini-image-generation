@@ -6,6 +6,7 @@ Gemini API를 통해서 이미지를 생성 할 수 있는 MCP 서버를 만들�
 ## 요구 사항
 요구 사항은 context를 통해서 이미지를 생성 하고, 지정한 폴더에 저장 할 수 있도록 해 줘.
 model도 선택 할 수 있도록 해 줘, 기본값은 "gemini-2.0-flash-001"임. 
+npm으로 배포 해서 npx로 실행 할 수 있도록 해 줘
 
 ## 참고 사이트
 - [MCP typescript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
