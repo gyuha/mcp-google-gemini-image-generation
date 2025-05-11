@@ -7,7 +7,7 @@ import { ensureDirectoryExists } from './image-utils.js';
 // Load environment variables
 dotenv.config();
 // Default settings
-const DEFAULT_PORT = parseInt(process.env.PORT || '3000');
+const DEFAULT_PORT = parseInt(process.env.PORT || '23032');
 const DEFAULT_HOST = process.env.HOST || 'localhost';
 const DEFAULT_OUTPUT_DIR = path.resolve(process.env.DEFAULT_OUTPUT_DIR || './generated-images');
 // Ensure output directory exists

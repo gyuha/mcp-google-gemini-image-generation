@@ -23,6 +23,15 @@
                 "--key",
                 "3532dcf0-1356-4147-bd63-3291b5e72e90"
             ]
+        },
+        "GeminiImageGeneration":
+        {
+            "type": "stdio",
+            "command": "node",
+            "args":
+            [
+                "./dist/index.js"
+            ]
         }
     }
 }

@@ -19,17 +19,20 @@ export async function generateImage(prompt, model = 'gemini-2.0-flash-001', widt
         console.log(`Using model: ${model}, dimensions: ${width}x${height}`);
         // Initialize the Gemini API client
         const genAI = new GoogleGenerativeAI(API_KEY);
-        const geminiModel = genAI.getGenerativeModel({ model });
+        const geminiModel = genAI.getGenerativeModel({
+            model,
+            generationConfig: {
+                responseMimeType: 'image/png',
+            }
+        });
         // Generate the image
         const result = await geminiModel.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-                responseType: 'multipart', // Ensure we get multipart response that may include images
-                imageSettings: {
-                    width,
-                    height
-                }
-            }
+            contents: [{
+                    role: 'user',
+                    parts: [{
+                            text: `Generate an image with dimensions ${width}x${height}: ${prompt}`
+                        }]
+                }]
         });
         const response = await result.response;
         // Check if we have any parts in the response

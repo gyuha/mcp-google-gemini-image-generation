@@ -55,12 +55,87 @@ npx mcp-google-gemini-image-generation --api-key=your_google_api_key_here
 ```
 Options:
   -V, --version           output the version number
-  -p, --port <number>     Port number for the MCP server (default: "3000")
+  -p, --port <number>     Port number for the MCP server (default: "23032")
   -h, --host <host>       Host for the MCP server (default: "localhost")
   -o, --output <directory> Directory for saving generated images (default: "./generated-images")
   -k, --api-key <key>     Google API key (or set GOOGLE_API_KEY env variable)
   --help                  display help for command
 ```
+
+## Using with VSCode GitHub Copilot or Cursor
+
+To use this MCP server with VSCode GitHub Copilot or Cursor, follow these steps:
+
+### 1. Create the `.vscode` directory in your project
+
+```bash
+mkdir -p .vscode
+```
+
+### 2. Create a `mcp.json` file in the `.vscode` directory
+
+Create a file at `.vscode/mcp.json` with the following content:
+
+```json
+{
+  "servers": {
+    "GeminiImageGeneration": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "mcp-google-gemini-image-generation",
+        "--api-key",
+        "YOUR_GOOGLE_API_KEY_HERE"
+      ]
+    }
+  }
+}
+```
+
+Alternatively, if running locally from the cloned repository:
+
+```json
+{
+  "servers": {
+    "GeminiImageGeneration": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "./dist/index.js"
+      ],
+      "env": {
+        "GOOGLE_API_KEY": "YOUR_GOOGLE_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+### 3. Add mcp configuration in VSCode settings
+
+In VSCode, you can add the following to your settings.json file (Ctrl+Shift+P, then "Preferences: Open Settings (JSON)"):
+
+```json
+"github.copilot.chat.locales": {
+  "mcp": {
+    "GeminiImageGeneration": "gemini-image-generator"
+  }
+}
+```
+
+### 4. Using in Copilot or Cursor
+
+You can then use the MCP server in Copilot or Cursor by prompting it to generate images. For example:
+
+```
+Generate an image of a mountain landscape with a lake using Gemini
+```
+
+The AI will use your configured MCP server to generate the image based on your prompt.
+
+### 5. Accessing Generated Images
+
+The images will be saved in the configured output directory (default: `./generated-images`). You can access them directly from your filesystem.
 
 ## MCP Protocol Usage
 
@@ -103,12 +178,12 @@ Send MCP requests to the server's HTTP endpoint:
 
 ```bash
 # Get model properties
-curl -X POST http://localhost:3000 \
+curl -X POST http://localhost:23032 \
   -H "Content-Type: application/json" \
   -d '{"lookup": "properties"}'
 
 # Generate an image
-curl -X POST http://localhost:3000 \
+curl -X POST http://localhost:23032 \
   -H "Content-Type: application/json" \
   -d '{"call": {"context": {"prompt": "a beautiful landscape with mountains and a lake"}}}'
 ```

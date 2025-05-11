@@ -21,7 +21,7 @@ program
   .name('mcp-gemini-image')
   .description(packageJson.description)
   .version(packageJson.version)
-  .option('-p, --port <number>', 'Port number for the MCP server', '3000')
+  .option('-p, --port <number>', 'Port number for the MCP server', '23032')
   .option('-h, --host <host>', 'Host for the MCP server', 'localhost')
   .option('-o, --output <directory>', 'Directory for saving generated images', './generated-images')
   .option('-k, --api-key <key>', 'Google API key (or set GOOGLE_API_KEY env variable)')
