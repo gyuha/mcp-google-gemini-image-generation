@@ -1,10 +1,20 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
+import fs from 'fs-extra';
+import path from 'path';
 import { saveBase64Image, generateUniqueFilename } from './image-utils.js';
 import { ImageGenerationResult } from './types.js';
 
-// Load environment variables
+// Load environment variables from .env and .env.local
 dotenv.config();
+// Check if .env.local exists and load it (will override .env values)
+const envLocalPath = path.resolve(process.cwd(), '.env.local');
+if (fs.existsSync(envLocalPath)) {
+  const envLocal = dotenv.parse(fs.readFileSync(envLocalPath));
+  for (const key in envLocal) {
+    process.env[key] = envLocal[key];
+  }
+}
 
 // Get API key from environment variables
 const API_KEY = process.env.GOOGLE_API_KEY;

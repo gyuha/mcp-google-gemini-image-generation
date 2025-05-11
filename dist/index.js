@@ -2,10 +2,20 @@ import http from 'http';
 import url from 'url';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs-extra';
+import readline from 'readline';
 import { generateImage } from './gemini-client.js';
 import { ensureDirectoryExists } from './image-utils.js';
-// Load environment variables
+// Load environment variables from .env and .env.local
 dotenv.config();
+// Check if .env.local exists and load it (will override .env values)
+const envLocalPath = path.resolve(process.cwd(), '.env.local');
+if (fs.existsSync(envLocalPath)) {
+    const envLocal = dotenv.parse(fs.readFileSync(envLocalPath));
+    for (const key in envLocal) {
+        process.env[key] = envLocal[key];
+    }
+}
 // Default settings
 const DEFAULT_PORT = parseInt(process.env.PORT || '23032');
 const DEFAULT_HOST = process.env.HOST || 'localhost';
@@ -164,8 +174,111 @@ export function startServer(port = DEFAULT_PORT, host = DEFAULT_HOST) {
     });
     return server;
 }
+/**
+ * Handle stdin/stdout mode for VSCode MCP protocol communication
+ */
+function handleStdioMode() {
+    // Create readline interface for stdin/stdout communication
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: false
+    });
+    console.error('MCP Server started in stdio mode for VSCode/Cursor integration');
+    rl.on('line', async (line) => {
+        try {
+            if (!line.trim())
+                return;
+            // Parse the incoming JSON message
+            const message = JSON.parse(line);
+            // Handle initialize request
+            if (message.jsonrpc === '2.0' && message.method === 'initialize') {
+                // Respond to initialize request
+                const response = {
+                    jsonrpc: '2.0',
+                    id: message.id,
+                    result: {
+                        capabilities: {
+                            textDocumentSync: 1,
+                            completionProvider: {
+                                resolveProvider: true,
+                                triggerCharacters: ['.']
+                            }
+                        }
+                    }
+                };
+                console.log(JSON.stringify(response));
+                // Send initialized notification
+                console.log(JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'initialized',
+                    params: {}
+                }));
+                return;
+            }
+            // Handle MCP lookup request
+            if (message.lookup === 'properties') {
+                const response = { result: geminiImageGenerator.properties };
+                console.log(JSON.stringify(response));
+                return;
+            }
+            // Handle MCP call request
+            if (message.call) {
+                const result = await geminiImageGenerator.call({
+                    context: message.call.context || {},
+                    user_input: message.call.user_input || ''
+                });
+                console.log(JSON.stringify(result));
+                return;
+            }
+            // Handle shutdown request
+            if (message.jsonrpc === '2.0' && message.method === 'shutdown') {
+                console.log(JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: message.id,
+                    result: null
+                }));
+                return;
+            }
+            // Handle exit notification
+            if (message.jsonrpc === '2.0' && message.method === 'exit') {
+                process.exit(0);
+                return;
+            }
+            // Handle unknown request
+            console.error('Unknown message:', message);
+        }
+        catch (error) {
+            console.error('Error processing message:', error);
+            // If we can identify a message ID, send a proper error response
+            try {
+                const message = JSON.parse(line);
+                if (message.id) {
+                    console.log(JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: message.id,
+                        error: {
+                            code: -32603,
+                            message: 'Internal error',
+                            data: error instanceof Error ? error.message : String(error)
+                        }
+                    }));
+                }
+            }
+            catch {
+                // If we can't parse the message, just log the error
+            }
+        }
+    });
+}
 // Start the server when this file is executed directly
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
-    startServer();
+    // Check if we should run in stdio mode for VSCode integration
+    if (process.argv.includes('--stdio')) {
+        handleStdioMode();
+    }
+    else {
+        startServer();
+    }
 }
-export default { startServer };
+export default { startServer, handleStdioMode };

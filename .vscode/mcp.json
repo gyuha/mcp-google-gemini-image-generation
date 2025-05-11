@@ -1,21 +1,16 @@
 {
-    "servers":
-    {
-        "Context7":
-        {
+    "servers": {
+        "Context7": {
             "type": "stdio",
             "command": "npx",
-            "args":
-            [
+            "args": [
                 "-y",
                 "@upstash/context7-mcp@latest"
             ]
         },
-        "server-sequential-thinking":
-        {
+        "server-sequential-thinking": {
             "command": "npx",
-            "args":
-            [
+            "args": [
                 "-y",
                 "@smithery/cli@latest",
                 "run",
@@ -24,14 +19,15 @@
                 "3532dcf0-1356-4147-bd63-3291b5e72e90"
             ]
         },
-        "GeminiImageGeneration":
-        {
+        "GeminiImageGeneration": {
             "type": "stdio",
             "command": "node",
-            "args":
-            [
-                "./dist/index.js"
-            ]
+            "args": [
+                "${workspaceFolder}/dist/index.js"
+            ],
+            "env": {
+                "GOOGLE_API_KEY": "${env:GOOGLE_API_KEY}"
+            }
         }
     }
 }

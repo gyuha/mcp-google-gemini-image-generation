@@ -4,8 +4,20 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs-extra';
+import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+
+// Load environment variables from .env and .env.local
+dotenv.config();
+// Check if .env.local exists and load it (will override .env values)
+const envLocalPath = path.resolve(process.cwd(), '.env.local');
+if (fs.existsSync(envLocalPath)) {
+  const envLocal = dotenv.parse(fs.readFileSync(envLocalPath));
+  for (const key in envLocal) {
+    process.env[key] = envLocal[key];
+  }
+}
 
 // Get package information
 const __filename = fileURLToPath(import.meta.url);
@@ -21,9 +33,9 @@ program
   .name('mcp-gemini-image')
   .description(packageJson.description)
   .version(packageJson.version)
-  .option('-p, --port <number>', 'Port number for the MCP server', '23032')
-  .option('-h, --host <host>', 'Host for the MCP server', 'localhost')
-  .option('-o, --output <directory>', 'Directory for saving generated images', './generated-images')
+  .option('-p, --port <number>', 'Port number for the MCP server', process.env.PORT || '23032')
+  .option('-h, --host <host>', 'Host for the MCP server', process.env.HOST || 'localhost')
+  .option('-o, --output <directory>', 'Directory for saving generated images', process.env.DEFAULT_OUTPUT_DIR || './generated-images')
   .option('-k, --api-key <key>', 'Google API key (or set GOOGLE_API_KEY env variable)')
   .action(async (options) => {
     try {
