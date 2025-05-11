@@ -13,6 +13,43 @@ model도 선택 할 수 있도록 해 줘, 기본값은 "gemini-2.0-flash-001"�
 - [Gemini 이미지 생성](https://ai.google.dev/gemini-api/docs/image-generation?hl=ko#javascript_1)
 - [Google Gen AI SDK for TypeScript and JavaScript](https://www.npmjs.com/package/@google/genai)
 
+## 생성 코드
+```js
+import { GoogleGenAI, Modality } from "@google/genai";
+import * as fs from "node:fs";
+
+async function main() {
+
+  const ai = new GoogleGenAI({ apiKey: "GEMINI_API_KEY" });
+
+  const contents =
+    "Hi, can you create a 3d rendered image of a pig " +
+    "with wings and a top hat flying over a happy " +
+    "futuristic scifi city with lots of greenery?";
+
+  // Set responseModalities to include "Image" so the model can generate  an image
+  const response = await ai.models.generateContent({
+    model: "gemini-2.0-flash-preview-image-generation",
+    contents: contents,
+    config: {
+      responseModalities: [Modality.TEXT, Modality.IMAGE],
+    },
+  });
+  for (const part of response.candidates[0].content.parts) {
+    // Based on the part type, either show the text or save the image
+    if (part.text) {
+      console.log(part.text);
+    } else if (part.inlineData) {
+      const imageData = part.inlineData.data;
+      const buffer = Buffer.from(imageData, "base64");
+      fs.writeFileSync("gemini-native-image.png", buffer);
+      console.log("Image saved as gemini-native-image.png");
+    }
+  }
+}
+
+main();
+```
 
 ## Requirements
 - use Context7 mcp
