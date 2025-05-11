@@ -10,6 +10,7 @@ A Model Context Protocol (MCP) server that uses Google's Gemini API to generate 
 - Save generated images to a specified directory
 - Access via MCP protocol
 - Easy to run with NPX
+- Handles API rate limits gracefully with automatic retries
 
 ## Installation
 
@@ -61,6 +62,26 @@ Options:
   -k, --api-key <key>     Google API key (or set GOOGLE_API_KEY env variable)
   --help                  display help for command
 ```
+
+## API Rate Limits
+
+Google Gemini API has certain rate limits that you should be aware of:
+
+1. **Free Tier Limits**:
+   - Limited requests per minute and per day
+   - Limited input tokens per minute
+   - Limited generated content per day
+
+2. **Handling Rate Limits**:
+   - The server automatically implements exponential backoff for retries
+   - Default retry attempts: 3 times with increasing delay
+   - Consider upgrading to a paid tier for higher quotas if you frequently hit limits
+
+3. **Error Handling**:
+   - Rate limit errors (HTTP 429) are properly handled
+   - Descriptive error messages help diagnose quota issues
+
+For more information on Gemini API rate limits, visit: https://ai.google.dev/gemini-api/docs/rate-limits
 
 ## Using with VSCode GitHub Copilot or Cursor
 
@@ -186,6 +207,11 @@ curl -X POST http://localhost:23032 \
 curl -X POST http://localhost:23032 \
   -H "Content-Type: application/json" \
   -d '{"call": {"context": {"prompt": "a beautiful landscape with mountains and a lake"}}}'
+
+# Generate an image with HTTP endpoint
+curl -X POST http://localhost:23032/v1/providers/gemini-image-generator/generations \
+  -H "Content-Type: application/json" \
+  -d '{"context": {"prompt": "a beautiful landscape with mountains and a lake"}}'
 ```
 
 ## Response Format
@@ -212,6 +238,24 @@ An error response will return:
   }
 }
 ```
+
+## Common Issues and Solutions
+
+### API Rate Limit Errors
+
+If you encounter a "429 Too Many Requests" error:
+
+1. Wait a few minutes before retrying
+2. Consider using a different model 
+3. Upgrade to a paid Google API plan for higher quotas
+
+### Image Generation Failures
+
+If images are not being generated:
+
+1. Ensure your API key has access to the Gemini image generation features
+2. Check that you're using a supported model for image generation
+3. Try simplifying your prompt or reducing image dimensions
 
 ## License
 
