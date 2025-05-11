@@ -23,7 +23,8 @@
             "type": "stdio",
             "command": "node",
             "args": [
-                "${workspaceFolder}/dist/index.js"
+                "${workspaceFolder}/dist/index.js",
+                "--stdio"
             ],
             "env": {
                 "GOOGLE_API_KEY": "${env:GOOGLE_API_KEY}"

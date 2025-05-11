@@ -22,6 +22,7 @@ const DEFAULT_OUTPUT_DIR = process.env.DEFAULT_OUTPUT_DIR || './generated-images
  */
 export async function generateImage(prompt, model = 'gemini-2.0-flash-001', width = 1024, height = 1024, outputDir = DEFAULT_OUTPUT_DIR) {
     try {
+        const API_KEY = process.env.GOOGLE_API_KEY;
         if (!API_KEY) {
             throw new Error('GOOGLE_API_KEY is not set in environment variables');
         }
@@ -29,10 +30,12 @@ export async function generateImage(prompt, model = 'gemini-2.0-flash-001', widt
         console.log(`Using model: ${model}, dimensions: ${width}x${height}`);
         // Initialize the Gemini API client
         const genAI = new GoogleGenerativeAI(API_KEY);
+        // Configure model for image generation
         const geminiModel = genAI.getGenerativeModel({
             model,
             generationConfig: {
-                responseMimeType: 'image/png',
+                // Setting response mime type for image generation
+                responseMimeType: "image/png"
             }
         });
         // Generate the image
@@ -50,7 +53,7 @@ export async function generateImage(prompt, model = 'gemini-2.0-flash-001', widt
             throw new Error('No content received from Gemini API');
         }
         // Find the part containing image data
-        const part = response.candidates[0].content.parts.find(part => part.inlineData?.mimeType?.startsWith('image/'));
+        const part = response.candidates[0].content.parts.find((part) => part.inlineData?.mimeType?.startsWith('image/'));
         if (!part || !part.inlineData) {
             throw new Error('No image data found in response');
         }

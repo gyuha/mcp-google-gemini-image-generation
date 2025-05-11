@@ -1,11 +1,11 @@
-import http from 'http';
-import url from 'url';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs-extra';
+import http from 'http';
+import url from 'url';
 import readline from 'readline';
 import { generateImage } from './gemini-client.js';
-import { MCPLLMDefinition, MCPLLMCallResult, MCPLLMCallContext } from './types.js';
+import { GeminiImageGenerationContext } from './types.js';
 import { ensureDirectoryExists } from './image-utils.js';
 
 // Load environment variables from .env and .env.local
@@ -27,66 +27,37 @@ const DEFAULT_OUTPUT_DIR = path.resolve(process.env.DEFAULT_OUTPUT_DIR || './gen
 // Ensure output directory exists
 ensureDirectoryExists(DEFAULT_OUTPUT_DIR);
 
-// Define MCP LLM for Gemini image generation
-const geminiImageGenerator: MCPLLMDefinition = {
-  name: 'gemini-image-generator',
-  properties: {
-    description: 'MCP server for generating images using Google Gemini API',
-    models: ['gemini-2.0-flash-001', 'gemini-2.0-pro-001', 'gemini-1.5-pro-latest'],
-    features: ['image-generation', 'text-to-image'],
-  },
+// Define the Gemini image generation provider
+const geminiImageProvider = {
+  id: 'gemini-image-generator',
+  displayName: 'Gemini Image Generator',
+  description: 'Generate images using Google Gemini API',
   
-  // Main call handler
-  async call({ context, user_input }): Promise<MCPLLMCallResult> {
-    console.log('Received MCP request:', { context, user_input });
-    
-    try {
-      // Extract parameters from context
-      const prompt = context.prompt || user_input;
-      const model = context.model || 'gemini-2.0-flash-001';
-      const width = context.width || 1024;
-      const height = context.height || 1024;
-      const outputDir = context.outputDir || DEFAULT_OUTPUT_DIR;
-      
-      // Validate prompt
-      if (!prompt) {
-        return {
-          result: {
-            success: false,
-            error: 'A prompt is required for image generation'
-          }
-        };
-      }
-      
-      // Generate the image using Gemini API
-      const result = await generateImage(prompt, model, width, height, outputDir);
-      
-      if (result.success && result.imagePath) {
-        return {
-          result: {
-            success: true,
-            message: 'Image generated successfully',
-            imagePath: result.imagePath
-          }
-        };
-      } else {
-        return {
-          result: {
-            success: false,
-            error: result.error || 'Unknown error occurred during image generation'
-          }
-        };
-      }
-      
-    } catch (error) {
-      console.error('Error in MCP call handler:', error);
-      return {
-        result: {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
-        }
-      };
+  // Available models
+  models: [
+    {
+      id: 'gemini-2.0-flash-001',
+      displayName: 'Gemini 2.0 Flash',
+      description: 'Fast image generation model',
+      contextWindow: 4096,
+    },
+    {
+      id: 'gemini-2.0-pro-001',
+      displayName: 'Gemini 2.0 Pro',
+      description: 'High quality image generation model',
+      contextWindow: 4096,
+    },
+    {
+      id: 'gemini-1.5-pro-latest',
+      displayName: 'Gemini 1.5 Pro',
+      description: 'Gemini 1.5 Pro image generation capability',
+      contextWindow: 4096,
     }
+  ],
+  
+  // Capabilities
+  capabilities: {
+    imageGeneration: true
   }
 };
 
@@ -116,33 +87,74 @@ async function parseRequestBody(req: http.IncomingMessage): Promise<any> {
 }
 
 /**
- * Process MCP request
+ * Handle MCP requests for image generation
  */
 async function handleMCPRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   try {
+    console.log('📢[index.ts:93]: req: ', req);
     const requestBody = await parseRequestBody(req);
+    const parsedUrl = url.parse(req.url || '', true);
+    const pathSegments = parsedUrl.pathname?.split('/').filter(Boolean) || [];
     
-    // Process based on MCP protocol
-    if (requestBody.lookup === 'properties') {
-      // Return model properties
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ result: geminiImageGenerator.properties }));
-    } else if (requestBody.call) {
-      // Handle LLM call
-      const result = await geminiImageGenerator.call({
-        context: requestBody.call.context || {},
-        user_input: requestBody.call.user_input || ''
-      });
+    // MCP API versioning
+    if (pathSegments[0] === 'v1') {
+      // Handle provider information request
+      if (pathSegments[1] === 'providers' && pathSegments[2] === geminiImageProvider.id && !pathSegments[3]) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(geminiImageProvider));
+        return;
+      }
       
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(result));
-    } else {
-      // Unknown request
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ 
-        error: 'Invalid MCP request. Expected "lookup" or "call" property.' 
-      }));
+      // Handle generation request
+      if (pathSegments[1] === 'providers' && pathSegments[2] === geminiImageProvider.id && pathSegments[3] === 'generations') {
+        const context = requestBody.context || {};
+        
+        // Extract parameters
+        const prompt = context.prompt || '';
+        
+        if (!prompt) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'A prompt is required for image generation'
+          }));
+          return;
+        }
+        
+        const model = context.model || 'gemini-2.0-flash-001';
+        const width = context.width || 1024;
+        const height = context.height || 1024;
+        const outputDir = context.outputDir || DEFAULT_OUTPUT_DIR;
+        
+        // Generate the image
+        const result = await generateImage(prompt, model, width, height, outputDir);
+        
+        if (!result.success || !result.imagePath) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: result.error || 'Failed to generate image'
+          }));
+          return;
+        }
+        
+        // Return successful response
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          content: `Image generated successfully: ${result.imagePath}`,
+          metadata: {
+            imagePath: result.imagePath,
+            prompt,
+            width,
+            height,
+            model
+          }
+        }));
+        return;
+      }
     }
+    
+    // Handle invalid endpoints
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
   } catch (error) {
     console.error('Error handling request:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -154,17 +166,135 @@ async function handleMCPRequest(req: http.IncomingMessage, res: http.ServerRespo
 }
 
 /**
+ * Handle stdio communication for VSCode MCP integration
+ */
+function handleStdioMode() {
+  console.log('Starting MCP server in stdio mode for VSCode/Cursor integration');
+  
+  // Create readline interface for stdin/stdout
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: false
+  });
+  
+  // Listen for messages from VSCode
+  rl.on('line', async (line) => {
+    console.log('📢 Received request through stdio:', line);
+    
+    try {
+      if (!line.trim()) return;
+      
+      // Parse incoming message
+      const message = JSON.parse(line);
+      
+      // Handle JSON-RPC initialization
+      if (message.jsonrpc === '2.0' && message.method === 'initialize') {
+        console.log('📢 Handling initialize request');
+        const response = {
+          jsonrpc: '2.0',
+          id: message.id,
+          result: {
+            capabilities: {}
+          }
+        };
+        console.log(JSON.stringify(response));
+        return;
+      }
+      
+      // Handle MCP lookup request
+      if (message.lookup === 'properties') {
+        console.log('📢 Handling properties lookup');
+        const response = {
+          result: geminiImageProvider
+        };
+        console.log(JSON.stringify(response));
+        return;
+      }
+      
+      // Handle MCP image generation request
+      if (message.call && message.call.context) {
+        console.log('📢 Handling image generation request:', message.call);
+        
+        const context = message.call.context;
+        const prompt = context.prompt || message.call.user_input || '';
+        
+        if (!prompt) {
+          console.log(JSON.stringify({
+            result: {
+              success: false,
+              error: 'A prompt is required for image generation'
+            }
+          }));
+          return;
+        }
+        
+        const model = context.model || 'gemini-2.0-flash-001';
+        const width = context.width || 1024;
+        const height = context.height || 1024;
+        const outputDir = context.outputDir || DEFAULT_OUTPUT_DIR;
+        
+        try {
+          const result = await generateImage(prompt, model, width, height, outputDir);
+          
+          if (!result.success) {
+            console.log(JSON.stringify({
+              result: {
+                success: false,
+                error: result.error || 'Failed to generate image'
+              }
+            }));
+            return;
+          }
+          
+          console.log(JSON.stringify({
+            result: {
+              success: true,
+              message: 'Image generated successfully',
+              imagePath: result.imagePath
+            }
+          }));
+        } catch (error) {
+          console.error('Error generating image:', error);
+          console.log(JSON.stringify({
+            result: {
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error occurred'
+            }
+          }));
+        }
+        return;
+      }
+      
+      console.log(`Unknown message type: ${JSON.stringify(message)}`);
+      
+    } catch (error) {
+      console.error('Error processing message:', error);
+    }
+  });
+  
+  // Handle process termination
+  process.on('SIGINT', () => {
+    console.log('MCP server terminating');
+    process.exit(0);
+  });
+  
+  // Log to stderr instead of stdout to avoid interfering with protocol
+  console.log = console.error;
+}
+
+/**
  * Start the MCP server
  */
-export function startServer(port: number = DEFAULT_PORT, host: string = DEFAULT_HOST): http.Server {
+export function startServer(port: number = DEFAULT_PORT, host: string = DEFAULT_HOST) {
   // Create HTTP server for MCP
   const server = http.createServer(async (req, res) => {
     const parsedUrl = url.parse(req.url || '', true);
     
     // Set CORS headers for all responses
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     
     // Handle preflight OPTIONS request
     if (req.method === 'OPTIONS') {
@@ -173,13 +303,12 @@ export function startServer(port: number = DEFAULT_PORT, host: string = DEFAULT_
       return;
     }
     
-    // Only accept POST requests to root path
-    if (req.method === 'POST' && parsedUrl.pathname === '/') {
+    // Process MCP request
+    if (req.method === 'POST' || req.method === 'GET') {
       await handleMCPRequest(req, res);
     } else {
-      // Not found
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not found' }));
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
     }
   });
   
@@ -187,121 +316,21 @@ export function startServer(port: number = DEFAULT_PORT, host: string = DEFAULT_
   server.listen(port, host, () => {
     console.log(`MCP Gemini Image Generator server running at http://${host}:${port}/`);
     console.log(`Images will be saved to: ${DEFAULT_OUTPUT_DIR}`);
+    
+    // Check if API key is set
+    console.log('📢[index.ts:201]: process.env.GOOGLE_API_KEY: ', process.env.GOOGLE_API_KEY);
+    if (!process.env.GOOGLE_API_KEY) {
+      console.warn('⚠️  Warning: GOOGLE_API_KEY is not set in environment variables');
+      console.warn('Please set your API key in .env or .env.local file');
+    }
   });
   
   return server;
 }
 
-/**
- * Handle stdin/stdout mode for VSCode MCP protocol communication
- */
-function handleStdioMode() {
-  // Create readline interface for stdin/stdout communication
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: false
-  });
-  
-  console.error('MCP Server started in stdio mode for VSCode/Cursor integration');
-  
-  rl.on('line', async (line) => {
-    try {
-      if (!line.trim()) return;
-      
-      // Parse the incoming JSON message
-      const message = JSON.parse(line);
-      
-      // Handle initialize request
-      if (message.jsonrpc === '2.0' && message.method === 'initialize') {
-        // Respond to initialize request
-        const response = {
-          jsonrpc: '2.0',
-          id: message.id,
-          result: {
-            capabilities: {
-              textDocumentSync: 1,
-              completionProvider: {
-                resolveProvider: true,
-                triggerCharacters: ['.']
-              }
-            }
-          }
-        };
-        console.log(JSON.stringify(response));
-        
-        // Send initialized notification
-        console.log(JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'initialized',
-          params: {}
-        }));
-        return;
-      }
-      
-      // Handle MCP lookup request
-      if (message.lookup === 'properties') {
-        const response = { result: geminiImageGenerator.properties };
-        console.log(JSON.stringify(response));
-        return;
-      }
-      
-      // Handle MCP call request
-      if (message.call) {
-        const result = await geminiImageGenerator.call({
-          context: message.call.context || {},
-          user_input: message.call.user_input || ''
-        });
-        
-        console.log(JSON.stringify(result));
-        return;
-      }
-      
-      // Handle shutdown request
-      if (message.jsonrpc === '2.0' && message.method === 'shutdown') {
-        console.log(JSON.stringify({
-          jsonrpc: '2.0',
-          id: message.id,
-          result: null
-        }));
-        return;
-      }
-      
-      // Handle exit notification
-      if (message.jsonrpc === '2.0' && message.method === 'exit') {
-        process.exit(0);
-        return;
-      }
-      
-      // Handle unknown request
-      console.error('Unknown message:', message);
-      
-    } catch (error) {
-      console.error('Error processing message:', error);
-      // If we can identify a message ID, send a proper error response
-      try {
-        const message = JSON.parse(line);
-        if (message.id) {
-          console.log(JSON.stringify({
-            jsonrpc: '2.0',
-            id: message.id,
-            error: {
-              code: -32603,
-              message: 'Internal error',
-              data: error instanceof Error ? error.message : String(error)
-            }
-          }));
-        }
-      } catch {
-        // If we can't parse the message, just log the error
-      }
-    }
-  });
-}
-
 // Start the server when this file is executed directly
-if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
-  // Check if we should run in stdio mode for VSCode integration
+if (import.meta.url.endsWith('/index.js') || import.meta.url.endsWith('/index.ts')) {
+  // Check if we're running in stdio mode
   if (process.argv.includes('--stdio')) {
     handleStdioMode();
   } else {

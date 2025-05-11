@@ -1,4 +1,4 @@
-// MCP server context interface - what users will provide in requests
+// Define our custom context interface for Gemini image generation
 export interface GeminiImageGenerationContext {
   prompt: string;             // Required text prompt for image generation
   model?: string;             // Optional model selection (defaults to gemini-2.0-flash-001)

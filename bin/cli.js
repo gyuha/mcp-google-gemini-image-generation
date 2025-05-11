@@ -37,6 +37,7 @@ program
   .option('-h, --host <host>', 'Host for the MCP server', process.env.HOST || 'localhost')
   .option('-o, --output <directory>', 'Directory for saving generated images', process.env.DEFAULT_OUTPUT_DIR || './generated-images')
   .option('-k, --api-key <key>', 'Google API key (or set GOOGLE_API_KEY env variable)')
+  .option('--stdio', 'Run in stdio mode for integration with editors')
   .action(async (options) => {
     try {
       // Set environment variables from options
@@ -48,21 +49,23 @@ program
         process.env.DEFAULT_OUTPUT_DIR = options.output;
       }
       
-      // Import and start server
+      // Import our server implementation
       const { default: server } = await import('../dist/index.js');
+      
+      // Start the server
       server.startServer(parseInt(options.port), options.host);
       
       console.log(chalk.green('✨ MCP Gemini Image Generator is ready!'));
-      console.log(chalk.blue('Example MCP call:'));
+      console.log(chalk.blue('Example MCP request:'));
       console.log(chalk.gray(`
+POST http://${options.host}:${options.port}/v1/providers/gemini-image-generator/generations
+
 {
-  "call": {
-    "context": {
-      "prompt": "a beautiful landscape with mountains and a lake",
-      "model": "gemini-2.0-flash-001",
-      "width": 1024,
-      "height": 1024
-    }
+  "context": {
+    "prompt": "a beautiful landscape with mountains and a lake",
+    "model": "gemini-2.0-flash-001",
+    "width": 1024,
+    "height": 1024
   }
 }
       `));

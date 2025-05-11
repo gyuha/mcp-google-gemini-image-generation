@@ -32,6 +32,7 @@ export async function generateImage(
   outputDir: string = DEFAULT_OUTPUT_DIR
 ): Promise<ImageGenerationResult> {
   try {
+    const API_KEY = process.env.GOOGLE_API_KEY;
     if (!API_KEY) {
       throw new Error('GOOGLE_API_KEY is not set in environment variables');
     }
@@ -41,10 +42,13 @@ export async function generateImage(
 
     // Initialize the Gemini API client
     const genAI = new GoogleGenerativeAI(API_KEY);
+    
+    // Configure model for image generation
     const geminiModel = genAI.getGenerativeModel({ 
       model,
       generationConfig: {
-        responseMimeType: 'image/png',
+        // Setting response mime type for image generation
+        responseMimeType: "image/png"
       }
     });
 
@@ -67,7 +71,7 @@ export async function generateImage(
     
     // Find the part containing image data
     const part = response.candidates[0].content.parts.find(
-      part => part.inlineData?.mimeType?.startsWith('image/')
+      (part: any) => part.inlineData?.mimeType?.startsWith('image/')
     );
     
     if (!part || !part.inlineData) {
