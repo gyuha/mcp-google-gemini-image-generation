@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import fs from 'fs-extra';
 import path from 'path';
@@ -28,32 +27,62 @@ export async function generateImage(prompt, model = 'gemini-2.0-flash-001', widt
         }
         console.log(`Generating image with prompt: "${prompt}"`);
         console.log(`Using model: ${model}, dimensions: ${width}x${height}`);
-        // Initialize the Gemini API client with the API key
-        const genAI = new GoogleGenerativeAI(API_KEY);
-        // Create a model instance for text-only generation
-        const geminiModel = genAI.getGenerativeModel({ model });
-        // Prepare the prompt with appropriate instructions for image generation
-        const enhancedPrompt = `Generate an image of: ${prompt}. The image should have dimensions of ${width}x${height} pixels.`;
-        console.log(`Sending request to Gemini API with enhanced prompt: "${enhancedPrompt}"`);
-        // Use a simple text request to avoid specifying problematic response formats
-        const result = await geminiModel.generateContent(enhancedPrompt);
-        const response = await result.response;
-        console.log("Response received from Gemini API");
-        // Extract image data from response parts
-        const parts = response.candidates?.[0]?.content?.parts || [];
+        // 이미지 생성을 위한 Fetch 직접 사용 (Google Generative AI SDK는 이미지 생성에 문제가 있음)
+        const apiVersion = 'v1beta';
+        const baseUrl = 'https://generativelanguage.googleapis.com';
+        // 모델 이름에서 버전 정보 추출 (e.g., gemini-1.5-pro-latest → gemini-1.5-pro)
+        const modelBase = model.split('-latest')[0]; // latest가 있을 경우 제거
+        console.log(`Using API endpoint: ${baseUrl}/${apiVersion}/models/${model}:generateContent`);
+        // generateContent 엔드포인트 직접 호출
+        const response = await fetch(`${baseUrl}/${apiVersion}/models/${model}:generateContent?key=${API_KEY}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents: [{
+                        parts: [{
+                                text: `Generate an image of: ${prompt}. The image should have dimensions of ${width}x${height} pixels.`
+                            }]
+                    }],
+                generationConfig: {
+                    temperature: 0.9,
+                    maxOutputTokens: 8192,
+                }
+            })
+        });
+        console.log(`API response status: ${response.status}`);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API Error response:', errorText);
+            throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        // 응답 구문 분석
+        const responseData = await response.json();
+        console.log('API response received');
+        const candidates = responseData.candidates || [];
+        if (candidates.length === 0) {
+            const finishReason = responseData.promptFeedback?.blockReason || 'unknown';
+            throw new Error(`No candidates returned. Finish reason: ${finishReason}`);
+        }
+        const parts = candidates[0]?.content?.parts || [];
         console.log(`Found ${parts.length} parts in response`);
-        // Find the part containing image data (if any)
-        const imagePart = parts.find(part => part.inlineData &&
+        // 이미지 데이터 검색
+        const imagePart = parts.find((part) => part.inlineData &&
             part.inlineData.mimeType &&
             part.inlineData.mimeType.startsWith('image/'));
         if (!imagePart || !imagePart.inlineData || !imagePart.inlineData.data) {
-            console.log("No image data found in response parts");
-            // If no image part is found, the response might be text describing why image generation failed
-            const textParts = parts.filter(part => part.text).map(part => part.text).join("\n");
-            throw new Error(`Failed to generate image. API response: ${textParts || "No explanation provided by the API"}`);
+            // 텍스트 응답 찾기
+            const textParts = parts.filter((part) => part.text).map((part) => part.text).join("\n");
+            console.log('Text response from API:', textParts);
+            // 오류 응답 확인
+            if (responseData.promptFeedback) {
+                console.log('Prompt feedback:', responseData.promptFeedback);
+            }
+            throw new Error(`Failed to generate image. API response: ${textParts || JSON.stringify(responseData)}`);
         }
         console.log(`Image data found with MIME type: ${imagePart.inlineData.mimeType}`);
-        // Save the image
+        // 이미지 저장
         const filename = generateUniqueFilename(prompt);
         const imagePath = saveBase64Image(imagePart.inlineData.data, outputDir, filename);
         console.log(`Image saved successfully at: ${imagePath}`);
