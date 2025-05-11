@@ -63,7 +63,7 @@ POST http://${options.host}:${options.port}/v1/providers/gemini-image-generator/
 {
   "context": {
     "prompt": "a beautiful landscape with mountains and a lake",
-    "model": "gemini-2.0-flash-001",
+    "model": "gemini-2.0-flash-preview-image-generation",
     "width": 1024,
     "height": 1024
   }

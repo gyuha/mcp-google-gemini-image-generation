@@ -1,3 +1,4 @@
+import { GoogleGenAI, Modality } from "@google/genai";
 import dotenv from 'dotenv';
 import fs from 'fs-extra';
 import path from 'path';
@@ -19,7 +20,7 @@ const DEFAULT_OUTPUT_DIR = process.env.DEFAULT_OUTPUT_DIR || './generated-images
 /**
  * Generates an image using Google's Gemini API
  */
-export async function generateImage(prompt, model = 'gemini-2.0-flash-001', width = 1024, height = 1024, outputDir = DEFAULT_OUTPUT_DIR) {
+export async function generateImage(prompt, model = 'gemini-2.0-flash-preview-image-generation', width = 1024, height = 1024, outputDir = DEFAULT_OUTPUT_DIR) {
     try {
         const API_KEY = process.env.GOOGLE_API_KEY;
         if (!API_KEY) {
@@ -27,65 +28,55 @@ export async function generateImage(prompt, model = 'gemini-2.0-flash-001', widt
         }
         console.log(`Generating image with prompt: "${prompt}"`);
         console.log(`Using model: ${model}, dimensions: ${width}x${height}`);
-        // Use REST API directly without SDK to avoid MIME type issues
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`;
-        // Prepare request body without any problematic MIME type settings
-        const requestBody = {
-            contents: [
-                {
-                    parts: [
-                        { text: `Create an image of ${prompt}. Make it ${width}x${height} pixels.` }
-                    ]
-                }
-            ]
-        };
-        console.log(`Sending request to ${apiUrl}`);
-        // Make direct API call
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
+        // Initialize the Gemini API client with the API key
+        const ai = new GoogleGenAI({ apiKey: API_KEY });
+        // Prepare content with dimensions specified in the prompt
+        // The prompt should specify both what to generate and the desired dimensions
+        const contents = [
+            { text: `Generate an image of: ${prompt}. The image should be ${width}x${height} pixels.` }
+        ];
+        console.log(`Sending request to Gemini API with prompt`);
+        // Set responseModalities to include "Image" so the model can generate an image
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: contents,
+            config: {
+                responseModalities: [Modality.TEXT, Modality.IMAGE],
+            },
         });
-        // Check for API errors
-        if (!response.ok) {
-            const errorData = await response.text();
-            console.error(`API Error (${response.status}): ${errorData}`);
-            throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+        console.log("Response received from Gemini API");
+        // Validate response structure
+        if (!response.candidates ||
+            response.candidates.length === 0 ||
+            !response.candidates[0].content ||
+            !response.candidates[0].content.parts) {
+            throw new Error('Invalid or empty response from Gemini API');
         }
-        // Parse response
-        const responseData = await response.json();
-        console.log(`Response received with status code: ${response.status}`);
-        // Log response structure for debugging (limited to avoid huge logs)
-        const responsePreview = JSON.stringify(responseData).substring(0, 300);
-        console.log(`Response preview: ${responsePreview}...`);
-        // Extract image data from response
-        const candidates = responseData.candidates || [];
-        if (candidates.length === 0) {
-            throw new Error('No candidates returned from API');
-        }
-        const parts = candidates[0]?.content?.parts || [];
-        console.log(`Found ${parts.length} parts in response`);
-        // Find image data in parts
-        const imagePart = parts.find((part) => part.inlineData &&
-            part.inlineData.mimeType &&
-            part.inlineData.mimeType.startsWith('image/'));
-        if (!imagePart || !imagePart.inlineData) {
-            // If no image found, check for text response that might explain why
-            const textParts = parts
-                .filter((part) => part.text)
-                .map((part) => part.text)
-                .join('\n');
-            console.log(`No image found. Text response: ${textParts || 'None'}`);
-            if (responseData.promptFeedback) {
-                console.log(`Prompt feedback: ${JSON.stringify(responseData.promptFeedback)}`);
+        let imagePath = "";
+        let hasImage = false;
+        // Process each part of the response
+        for (const part of response.candidates[0].content.parts) {
+            // Based on the part type, either show the text or save the image
+            if (part.text) {
+                console.log("Text response:", part.text);
             }
-            throw new Error('No image data found in API response');
+            else if (part.inlineData) {
+                console.log(`Image data found with MIME type: ${part.inlineData.mimeType}`);
+                const imageData = part.inlineData.data;
+                if (!imageData) {
+                    console.log("No image data found in the response part");
+                    continue;
+                }
+                // Save the image
+                const filename = generateUniqueFilename(prompt);
+                imagePath = saveBase64Image(imageData, outputDir, filename);
+                hasImage = true;
+                console.log(`Image saved successfully at: ${imagePath}`);
+            }
         }
-        // Image found, save it
-        console.log(`Image found with MIME type: ${imagePart.inlineData.mimeType}`);
-        const filename = generateUniqueFilename(prompt);
-        const imagePath = saveBase64Image(imagePart.inlineData.data, outputDir, filename);
-        console.log(`Image saved to: ${imagePath}`);
+        if (!hasImage) {
+            throw new Error('No image data was generated by Gemini API');
+        }
         return {
             success: true,
             imagePath

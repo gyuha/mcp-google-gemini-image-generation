@@ -1,7 +1,7 @@
 // Define our custom context interface for Gemini image generation
 export interface GeminiImageGenerationContext {
   prompt: string;             // Required text prompt for image generation
-  model?: string;             // Optional model selection (defaults to gemini-2.0-flash-001)
+  model?: string;             // Optional model selection (defaults to gemini-2.0-flash-preview-image-generation)
   width?: number;             // Optional image width (default will be set)
   height?: number;            // Optional image height (default will be set)
   outputDir?: string;         // Optional custom output directory

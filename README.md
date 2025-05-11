@@ -5,7 +5,7 @@ A Model Context Protocol (MCP) server that uses Google's Gemini API to generate 
 ## Features
 
 - Generate images using Google's Gemini AI models
-- Select from different Gemini models (default: `gemini-2.0-flash-001`)
+- Select from different Gemini models (default: `gemini-2.0-flash-preview-image-generation`)
 - Customize image dimensions
 - Save generated images to a specified directory
 - Access via MCP protocol
@@ -156,7 +156,7 @@ Send MCP requests to the server's HTTP endpoint:
   "call": {
     "context": {
       "prompt": "a beautiful landscape with mountains and a lake",
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.0-flash-preview-image-generation",
       "width": 1024,
       "height": 1024
     }
@@ -169,7 +169,7 @@ Send MCP requests to the server's HTTP endpoint:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | prompt | string | *required* | Text prompt describing the image to generate |
-| model | string | "gemini-2.0-flash-001" | Gemini model to use |
+| model | string | "gemini-2.0-flash-preview-image-generation" | Gemini model to use |
 | width | number | 1024 | Image width in pixels |
 | height | number | 1024 | Image height in pixels |
 | outputDir | string | "./generated-images" | Directory to save images |
