@@ -30,7 +30,7 @@ const geminiImageProvider = {
     // Available models
     models: [
         {
-            id: 'gemini-2.0-flash-001',
+            id: 'gemini-2.0-flash-preview-image-generation',
             displayName: 'Gemini 2.0 Flash',
             description: 'Fast image generation model',
             contextWindow: 4096,
@@ -104,7 +104,7 @@ async function handleMCPRequest(req, res) {
                     }));
                     return;
                 }
-                const model = context.model || 'gemini-2.0-flash-001';
+                const model = context.model || 'gemini-2.0-flash-preview-image-generation';
                 const width = context.width || 1024;
                 const height = context.height || 1024;
                 const outputDir = context.outputDir || DEFAULT_OUTPUT_DIR;
@@ -200,7 +200,7 @@ function handleStdioMode() {
                     }));
                     return;
                 }
-                const model = context.model || 'gemini-2.0-flash-001';
+                const model = context.model || 'gemini-2.0-flash-preview-image-generation';
                 const width = context.width || 1024;
                 const height = context.height || 1024;
                 const outputDir = context.outputDir || DEFAULT_OUTPUT_DIR;

@@ -3,13 +3,20 @@
   "version": "1.0.0",
   "description": "MCP server for generating images with Google's Gemini API",
   "main": "dist/index.js",
+  "type": "module",
   "bin": {
     "mcp-gemini-image": "./bin/cli.js"
   },
+  "files": [
+    "dist/**/*",
+    "bin/**/*",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -45,5 +52,7 @@
   "engines": {
     "node": ">=16.0.0"
   },
-  "type": "module"
+  "publishConfig": {
+    "access": "public"
+  }
 }
