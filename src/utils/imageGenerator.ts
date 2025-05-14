@@ -19,6 +19,13 @@ export class ImageGenerator {
     this.defaultModel = defaultModel;
   }
 
+  // Method to change output directory
+  setOutputDir(outputDir: string): void {
+    if (outputDir) {
+      this.outputDir = outputDir;
+    }
+  }
+
   async generateImage({ 
     prompt, 
     model = this.defaultModel,

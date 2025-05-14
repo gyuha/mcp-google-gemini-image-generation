@@ -19,3 +19,10 @@ export const ensureOutputDir = async (outputDir: string = DEFAULT_CONFIG.outputD
   await fs.ensureDir(absolutePath);
   return absolutePath;
 };
+
+// Set custom output directory
+export const setCustomOutputDir = (newPath: string): void => {
+  if (newPath && typeof newPath === 'string') {
+    DEFAULT_CONFIG.outputDir = newPath;
+  }
+};

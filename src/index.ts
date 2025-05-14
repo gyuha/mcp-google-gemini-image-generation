@@ -8,8 +8,9 @@ import {
   McpError
 } from "@modelcontextprotocol/sdk/types.js";
 import dotenv from "dotenv";
+import path from "path";
 import { ImageGenerator } from './utils/imageGenerator.js';
-import { DEFAULT_CONFIG } from './utils/config.js';
+import { DEFAULT_CONFIG, setCustomOutputDir } from './utils/config.js';
 import { GenerateImageParams } from './types/index.js';
 
 dotenv.config();
@@ -75,6 +76,20 @@ class GeminiImageServer {
                 }
               },
               required: ["prompt"]
+            }
+          },
+          {
+            name: "set_output_directory",
+            description: "Set the default output directory for saving generated images",
+            inputSchema: {
+              type: "object",
+              properties: {
+                path: {
+                  type: "string",
+                  description: "The directory path where images will be saved"
+                }
+              },
+              required: ["path"]
             }
           },
           {
@@ -177,6 +192,36 @@ class GeminiImageServer {
               isError: true
             };
           }
+        } else if (request.params.name === "set_output_directory") {
+          const { path: outputPath } = request.params.arguments as { path: string };
+          
+          if (!outputPath) {
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              "Output path is required"
+            );
+          }
+
+          try {
+            setCustomOutputDir(outputPath);
+            // Update the image generator with new output directory
+            this.imageGenerator.setOutputDir(outputPath);
+            
+            return {
+              content: [{
+                type: "text",
+                text: `Output directory successfully set to: ${outputPath}`
+              }]
+            };
+          } catch (error) {
+            return {
+              content: [{
+                type: "text",
+                text: `Error setting output directory: ${error instanceof Error ? error.message : 'Unknown error'}`
+              }],
+              isError: true
+            };
+          }
         } else if (request.params.name === "sequential_thinking") {
           // Just return the parameters for sequential thinking
           return {
@@ -205,6 +250,12 @@ class GeminiImageServer {
             ErrorCode.InvalidRequest,
             'Prompt is required to generate an image'
           );
+        }
+
+        // If outputPath is provided in context, set it as the default
+        if (outputPath) {
+          setCustomOutputDir(outputPath);
+          this.imageGenerator.setOutputDir(outputPath);
         }
 
         console.log(`Generating image from context with prompt: ${prompt}`);
