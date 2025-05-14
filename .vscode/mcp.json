@@ -18,9 +18,11 @@
     },
     "gemini-image-generation": {
       "type": "stdio",
-      "command": "npm",
-      "args": ["run", "dev"],
-      "cwd": "${workspaceFolder}"
+      "command": "node",
+      "args": ["${workspaceFolder}/dist/index.js"],
+      "env": {
+        "GEMINI_API_KEY": "${env:GEMINI_API_KEY}"
+      }
     }
   }
 }
