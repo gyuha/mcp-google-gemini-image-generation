@@ -5,8 +5,10 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
   ErrorCode,
-  McpError
+  McpError,
+  ServerRequest
 } from "@modelcontextprotocol/sdk/types.js";
+import * as z from "zod";
 import dotenv from "dotenv";
 import path from "path";
 import { ImageGenerator } from './utils/imageGenerator.js';
@@ -17,7 +19,23 @@ dotenv.config();
 
 const API_KEY = process.env.GEMINI_API_KEY;
 if (!API_KEY) {
-  throw new Error("GEMINI_API_KEY 환경 변수가 필요합니다");
+  throw new Error("GEMINI_API_KEY environment variable is required");
+}
+
+interface SetOutputDirectoryParams {
+  path: string;
+}
+
+interface SequentialThinkingParams {
+  thought: string;
+  nextThoughtNeeded: boolean;
+  thoughtNumber: number;
+  totalThoughts: number;
+  isRevision?: boolean;
+  revisesThought?: number;
+  branchFromThought?: number;
+  branchId?: string;
+  needsMoreThoughts?: boolean;
 }
 
 class GeminiImageServer {
@@ -93,6 +111,32 @@ class GeminiImageServer {
             }
           },
           {
+            name: "generate_from_context",
+            description: "Generate an image using context parameters",
+            inputSchema: {
+              type: "object",
+              properties: {
+                prompt: {
+                  type: "string",
+                  description: "The prompt to generate an image from"
+                },
+                model: {
+                  type: "string",
+                  description: "The model to use for image generation"
+                },
+                outputPath: {
+                  type: "string",
+                  description: "Directory to save the generated image to"
+                },
+                outputFilename: {
+                  type: "string",
+                  description: "Filename to save the generated image as"
+                }
+              },
+              required: ["prompt"]
+            }
+          },
+          {
             name: "sequential_thinking",
             description: "Process complex image generation in sequential steps",
             inputSchema: {
@@ -150,18 +194,26 @@ class GeminiImageServer {
       CallToolRequestSchema,
       async (request) => {
         if (request.params.name === "generate_image") {
-          const params = request.params.arguments as GenerateImageParams;
+          // Safely cast and validate
+          const params = request.params.arguments as Record<string, unknown>;
           
-          if (!params?.prompt) {
+          if (!params || typeof params.prompt !== 'string') {
             throw new McpError(
               ErrorCode.InvalidParams,
               "Prompt is required to generate an image"
             );
           }
 
-          console.log(`Generating image with prompt: ${params.prompt}`);
+          const imageParams: GenerateImageParams = {
+            prompt: params.prompt,
+            model: typeof params.model === 'string' ? params.model : undefined,
+            outputPath: typeof params.outputPath === 'string' ? params.outputPath : undefined,
+            outputFilename: typeof params.outputFilename === 'string' ? params.outputFilename : undefined
+          };
+
+          console.log(`Generating image with prompt: ${imageParams.prompt}`);
           try {
-            const result = await this.imageGenerator.generateImage(params);
+            const result = await this.imageGenerator.generateImage(imageParams);
 
             if (result.error) {
               return {
@@ -179,7 +231,7 @@ class GeminiImageServer {
                 text: JSON.stringify({
                   text: result.text || 'Image generated successfully',
                   imagePath: result.imagePath,
-                  model: params.model || DEFAULT_CONFIG.defaultModel
+                  model: imageParams.model || DEFAULT_CONFIG.defaultModel
                 }, null, 2)
               }]
             };
@@ -193,24 +245,27 @@ class GeminiImageServer {
             };
           }
         } else if (request.params.name === "set_output_directory") {
-          const { path: outputPath } = request.params.arguments as { path: string };
-          
-          if (!outputPath) {
+          const args = request.params.arguments as Record<string, unknown>;
+          if (!args || typeof args.path !== 'string') {
             throw new McpError(
               ErrorCode.InvalidParams,
               "Output path is required"
             );
           }
 
+          const params: SetOutputDirectoryParams = {
+            path: args.path
+          };
+
           try {
-            setCustomOutputDir(outputPath);
+            setCustomOutputDir(params.path);
             // Update the image generator with new output directory
-            this.imageGenerator.setOutputDir(outputPath);
+            this.imageGenerator.setOutputDir(params.path);
             
             return {
               content: [{
                 type: "text",
-                text: `Output directory successfully set to: ${outputPath}`
+                text: `Output directory successfully set to: ${params.path}`
               }]
             };
           } catch (error) {
@@ -230,6 +285,63 @@ class GeminiImageServer {
               text: JSON.stringify(request.params.arguments, null, 2)
             }]
           };
+        } else if (request.params.name === "generate_from_context") {
+          // New handler for context-based generation
+          const params = request.params.arguments as Record<string, unknown>;
+          
+          if (!params || typeof params.prompt !== 'string') {
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              "Prompt is required to generate an image"
+            );
+          }
+
+          const imageParams: GenerateImageParams = {
+            prompt: params.prompt,
+            model: typeof params.model === 'string' ? params.model : undefined,
+            outputPath: typeof params.outputPath === 'string' ? params.outputPath : undefined,
+            outputFilename: typeof params.outputFilename === 'string' ? params.outputFilename : undefined
+          };
+
+          // If outputPath is provided, set it as the default
+          if (imageParams.outputPath) {
+            setCustomOutputDir(imageParams.outputPath);
+            this.imageGenerator.setOutputDir(imageParams.outputPath);
+          }
+
+          console.log(`Generating image from context with prompt: ${imageParams.prompt}`);
+          try {
+            const result = await this.imageGenerator.generateImage(imageParams);
+
+            if (result.error) {
+              return {
+                content: [{
+                  type: "text",
+                  text: `Error generating image: ${result.error}`
+                }],
+                isError: true
+              };
+            }
+
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  text: result.text || 'Image generated successfully',
+                  imagePath: result.imagePath,
+                  model: imageParams.model || DEFAULT_CONFIG.defaultModel
+                }, null, 2)
+              }]
+            };
+          } catch (error) {
+            return {
+              content: [{
+                type: "text",
+                text: `Error generating image: ${error instanceof Error ? error.message : 'Unknown error'}`
+              }],
+              isError: true
+            };
+          }
         } else {
           throw new McpError(
             ErrorCode.MethodNotFound,
@@ -238,85 +350,6 @@ class GeminiImageServer {
         }
       }
     );
-
-    // Handle context-based requests
-    this.server.onrequest = async (request) => {
-      // If it's not a tool request and has context, process as context-based request
-      if (!ListToolsRequestSchema.is(request) && !CallToolRequestSchema.is(request) && request.context) {
-        const { prompt, model, outputPath, outputFilename } = request.context;
-
-        if (!prompt) {
-          throw new McpError(
-            ErrorCode.InvalidRequest,
-            'Prompt is required to generate an image'
-          );
-        }
-
-        // If outputPath is provided in context, set it as the default
-        if (outputPath) {
-          setCustomOutputDir(outputPath);
-          this.imageGenerator.setOutputDir(outputPath);
-        }
-
-        console.log(`Generating image from context with prompt: ${prompt}`);
-        try {
-          const result = await this.imageGenerator.generateImage({
-            prompt,
-            model,
-            outputPath,
-            outputFilename
-          });
-
-          if (result.error) {
-            throw new McpError(
-              ErrorCode.ExecutionError,
-              result.error
-            );
-          }
-
-          return {
-            text: result.text || 'Image generated successfully',
-            imagePath: result.imagePath,
-            model: model || DEFAULT_CONFIG.defaultModel
-          };
-        } catch (error) {
-          if (error instanceof McpError) {
-            throw error;
-          }
-          
-          throw new McpError(
-            ErrorCode.ExecutionError,
-            error instanceof Error ? error.message : 'Unknown error occurred'
-          );
-        }
-      }
-      
-      return undefined;
-    };
-
-    // Define context schema
-    this.server.defineContextSchema({
-      type: "object",
-      properties: {
-        prompt: {
-          type: "string",
-          description: "The prompt to generate an image from"
-        },
-        model: {
-          type: "string",
-          description: "The model to use for image generation"
-        },
-        outputPath: {
-          type: "string",
-          description: "Directory to save the generated image to"
-        },
-        outputFilename: {
-          type: "string",
-          description: "Filename to save the generated image as"
-        }
-      },
-      required: ["prompt"]
-    });
   }
 
   private setupErrorHandling(): void {
