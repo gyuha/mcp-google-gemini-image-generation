@@ -27,8 +27,8 @@ export class ImageGenerator {
                 model,
                 contents: prompt,
                 config: {
-                    // 중요 변경: 이미지만 받도록 설정
-                    responseModalities: [Modality.IMAGE],
+                    // 오류 수정: TEXT와 IMAGE 모두 요청해야 함
+                    responseModalities: [Modality.TEXT, Modality.IMAGE],
                 },
             });
             // Default filename if none provided
@@ -56,7 +56,7 @@ export class ImageGenerator {
                 }
                 return {
                     text: textResponse,
-                    imagePath
+                    imagePath: imageSaved ? imagePath : undefined
                 };
             }
             else {
