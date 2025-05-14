@@ -1,341 +1,303 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import fs from 'fs-extra';
-import http from 'http';
-import url from 'url';
-import readline from 'readline';
-import { generateImage } from './gemini-client.js';
-import { GeminiImageGenerationContext } from './types.js';
-import { ensureDirectoryExists } from './image-utils.js';
+#!/usr/bin/env node
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  ListToolsRequestSchema,
+  CallToolRequestSchema,
+  ErrorCode,
+  McpError
+} from "@modelcontextprotocol/sdk/types.js";
+import dotenv from "dotenv";
+import { ImageGenerator } from './utils/imageGenerator.js';
+import { DEFAULT_CONFIG } from './utils/config.js';
+import { GenerateImageParams } from './types/index.js';
 
-// Load environment variables from .env and .env.local
 dotenv.config();
-// Check if .env.local exists and load it (will override .env values)
-const envLocalPath = path.resolve(process.cwd(), '.env.local');
-if (fs.existsSync(envLocalPath)) {
-  const envLocal = dotenv.parse(fs.readFileSync(envLocalPath));
-  for (const key in envLocal) {
-    process.env[key] = envLocal[key];
-  }
+
+const API_KEY = process.env.GEMINI_API_KEY;
+if (!API_KEY) {
+  throw new Error("GEMINI_API_KEY 환경 변수가 필요합니다");
 }
 
-// Default settings
-const DEFAULT_PORT = parseInt(process.env.PORT || '23032');
-const DEFAULT_HOST = process.env.HOST || 'localhost';
-const DEFAULT_OUTPUT_DIR = path.resolve(process.env.DEFAULT_OUTPUT_DIR || './generated-images');
+class GeminiImageServer {
+  private server: Server;
+  private imageGenerator: ImageGenerator;
 
-// Ensure output directory exists
-ensureDirectoryExists(DEFAULT_OUTPUT_DIR);
-
-// Define the Gemini image generation provider
-const geminiImageProvider = {
-  id: 'gemini-image-generator',
-  displayName: 'Gemini Image Generator',
-  description: 'Generate images using Google Gemini API',
-  
-  // Available models
-  models: [
-    {
-      id: 'gemini-2.0-flash-preview-image-generation',
-      displayName: 'Gemini 2.0 Flash',
-      description: 'Fast image generation model',
-      contextWindow: 4096,
-    },
-    {
-      id: 'gemini-2.0-pro-001',
-      displayName: 'Gemini 2.0 Pro',
-      description: 'High quality image generation model',
-      contextWindow: 4096,
-    },
-    {
-      id: 'gemini-1.5-pro-latest',
-      displayName: 'Gemini 1.5 Pro',
-      description: 'Gemini 1.5 Pro image generation capability',
-      contextWindow: 4096,
-    }
-  ],
-  
-  // Capabilities
-  capabilities: {
-    imageGeneration: true
-  }
-};
-
-/**
- * Parse JSON request body from a HTTP request
- */
-async function parseRequestBody(req: http.IncomingMessage): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    
-    req.on('data', (chunk) => {
-      chunks.push(chunk);
-    });
-    
-    req.on('end', () => {
-      try {
-        const data = Buffer.concat(chunks).toString();
-        const json = JSON.parse(data);
-        resolve(json);
-      } catch (error) {
-        reject(new Error('Invalid JSON request body'));
+  constructor() {
+    this.server = new Server({
+      name: "gemini-image-generation",
+      version: "1.0.0",
+      description: "Generate images using Google Gemini API"
+    }, {
+      capabilities: {
+        resources: {},
+        tools: {}
       }
     });
-    
-    req.on('error', reject);
-  });
-}
 
-/**
- * Handle MCP requests for image generation
- */
-async function handleMCPRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  try {
-    console.log('📢[index.ts:93]: req: ', req);
-    const requestBody = await parseRequestBody(req);
-    const parsedUrl = url.parse(req.url || '', true);
-    const pathSegments = parsedUrl.pathname?.split('/').filter(Boolean) || [];
-    
-    // MCP API versioning
-    if (pathSegments[0] === 'v1') {
-      // Handle provider information request
-      if (pathSegments[1] === 'providers' && pathSegments[2] === geminiImageProvider.id && !pathSegments[3]) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(geminiImageProvider));
-        return;
-      }
-      
-      // Handle generation request
-      if (pathSegments[1] === 'providers' && pathSegments[2] === geminiImageProvider.id && pathSegments[3] === 'generations') {
-        const context = requestBody.context || {};
-        
-        // Extract parameters
-        const prompt = context.prompt || '';
-        
-        if (!prompt) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: 'A prompt is required for image generation'
-          }));
-          return;
-        }
-        
-        const model = context.model || 'gemini-2.0-flash-preview-image-generation';
-        const width = context.width || 1024;
-        const height = context.height || 1024;
-        const outputDir = context.outputDir || DEFAULT_OUTPUT_DIR;
-        
-        // Generate the image
-        const result = await generateImage(prompt, model, width, height, outputDir);
-        
-        if (!result.success || !result.imagePath) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: result.error || 'Failed to generate image'
-          }));
-          return;
-        }
-        
-        // Return successful response
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          content: `Image generated successfully: ${result.imagePath}`,
-          metadata: {
-            imagePath: result.imagePath,
-            prompt,
-            width,
-            height,
-            model
-          }
-        }));
-        return;
-      }
-    }
-    
-    // Handle invalid endpoints
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Not found' }));
-  } catch (error) {
-    console.error('Error handling request:', error);
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ 
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error' 
-    }));
+    // Create image generator instance
+    this.imageGenerator = new ImageGenerator(
+      DEFAULT_CONFIG.apiKey,
+      DEFAULT_CONFIG.outputDir,
+      DEFAULT_CONFIG.defaultModel
+    );
+
+    this.setupToolHandlers();
+    this.setupErrorHandling();
   }
-}
 
-/**
- * Handle stdio communication for VSCode MCP integration
- */
-function handleStdioMode() {
-  console.log('Starting MCP server in stdio mode for VSCode/Cursor integration');
-  
-  // Create readline interface for stdin/stdout
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: false
-  });
-  
-  // Listen for messages from VSCode
-  rl.on('line', async (line) => {
-    console.log('📢 Received request through stdio:', line);
-    
-    try {
-      if (!line.trim()) return;
-      
-      // Parse incoming message
-      const message = JSON.parse(line);
-      
-      // Handle JSON-RPC initialization
-      if (message.jsonrpc === '2.0' && message.method === 'initialize') {
-        console.log('📢 Handling initialize request');
-        const response = {
-          jsonrpc: '2.0',
-          id: message.id,
-          result: {
-            capabilities: {}
-          }
-        };
-        console.log(JSON.stringify(response));
-        return;
-      }
-      
-      // Handle MCP lookup request
-      if (message.lookup === 'properties') {
-        console.log('📢 Handling properties lookup');
-        const response = {
-          result: geminiImageProvider
-        };
-        console.log(JSON.stringify(response));
-        return;
-      }
-      
-      // Handle MCP image generation request
-      if (message.call && message.call.context) {
-        console.log('📢 Handling image generation request:', message.call);
-        
-        const context = message.call.context;
-        const prompt = context.prompt || message.call.user_input || '';
-        
-        if (!prompt) {
-          console.log(JSON.stringify({
-            result: {
-              success: false,
-              error: 'A prompt is required for image generation'
+  private setupToolHandlers(): void {
+    this.server.setRequestHandler(
+      ListToolsRequestSchema,
+      async () => ({
+        tools: [
+          {
+            name: "generate_image",
+            description: "Generate an image using Google Gemini API",
+            inputSchema: {
+              type: "object",
+              properties: {
+                prompt: {
+                  type: "string",
+                  description: "The prompt to generate an image from"
+                },
+                model: {
+                  type: "string",
+                  description: "The model to use for image generation (default: gemini-2.0-flash-preview-image-generation)"
+                },
+                outputPath: {
+                  type: "string",
+                  description: "Directory to save the generated image to"
+                },
+                outputFilename: {
+                  type: "string",
+                  description: "Filename to save the generated image as"
+                }
+              },
+              required: ["prompt"]
             }
-          }));
-          return;
+          },
+          {
+            name: "sequential_thinking",
+            description: "Process complex image generation in sequential steps",
+            inputSchema: {
+              type: "object",
+              properties: {
+                thought: {
+                  type: "string",
+                  description: "Current thinking step"
+                },
+                nextThoughtNeeded: {
+                  type: "boolean",
+                  description: "Whether another thought step is needed"
+                },
+                thoughtNumber: {
+                  type: "integer",
+                  description: "Current thought number",
+                  minimum: 1
+                },
+                totalThoughts: {
+                  type: "integer",
+                  description: "Estimated total thoughts needed",
+                  minimum: 1
+                },
+                isRevision: {
+                  type: "boolean",
+                  description: "Whether this revises previous thinking"
+                },
+                revisesThought: {
+                  type: "integer",
+                  description: "Which thought is being reconsidered",
+                  minimum: 1
+                },
+                branchFromThought: {
+                  type: "integer",
+                  description: "Branching point thought number",
+                  minimum: 1
+                },
+                branchId: {
+                  type: "string",
+                  description: "Branch identifier"
+                },
+                needsMoreThoughts: {
+                  type: "boolean",
+                  description: "If more thoughts are needed"
+                }
+              },
+              required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
+            }
+          }
+        ]
+      })
+    );
+
+    this.server.setRequestHandler(
+      CallToolRequestSchema,
+      async (request) => {
+        if (request.params.name === "generate_image") {
+          const params = request.params.arguments as GenerateImageParams;
+          
+          if (!params?.prompt) {
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              "Prompt is required to generate an image"
+            );
+          }
+
+          console.log(`Generating image with prompt: ${params.prompt}`);
+          try {
+            const result = await this.imageGenerator.generateImage(params);
+
+            if (result.error) {
+              return {
+                content: [{
+                  type: "text",
+                  text: `Error generating image: ${result.error}`
+                }],
+                isError: true
+              };
+            }
+
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  text: result.text || 'Image generated successfully',
+                  imagePath: result.imagePath,
+                  model: params.model || DEFAULT_CONFIG.defaultModel
+                }, null, 2)
+              }]
+            };
+          } catch (error) {
+            return {
+              content: [{
+                type: "text",
+                text: `Error generating image: ${error instanceof Error ? error.message : 'Unknown error'}`
+              }],
+              isError: true
+            };
+          }
+        } else if (request.params.name === "sequential_thinking") {
+          // Just return the parameters for sequential thinking
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify(request.params.arguments, null, 2)
+            }]
+          };
+        } else {
+          throw new McpError(
+            ErrorCode.MethodNotFound,
+            `Unknown tool: ${request.params.name}`
+          );
         }
-        
-        const model = context.model || 'gemini-2.0-flash-preview-image-generation';
-        const width = context.width || 1024;
-        const height = context.height || 1024;
-        const outputDir = context.outputDir || DEFAULT_OUTPUT_DIR;
-        
+      }
+    );
+
+    // Handle context-based requests
+    this.server.onrequest = async (request) => {
+      // If it's not a tool request and has context, process as context-based request
+      if (!ListToolsRequestSchema.is(request) && !CallToolRequestSchema.is(request) && request.context) {
+        const { prompt, model, outputPath, outputFilename } = request.context;
+
+        if (!prompt) {
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            'Prompt is required to generate an image'
+          );
+        }
+
+        console.log(`Generating image from context with prompt: ${prompt}`);
         try {
-          const result = await generateImage(prompt, model, width, height, outputDir);
-          
-          if (!result.success) {
-            console.log(JSON.stringify({
-              result: {
-                success: false,
-                error: result.error || 'Failed to generate image'
-              }
-            }));
-            return;
+          const result = await this.imageGenerator.generateImage({
+            prompt,
+            model,
+            outputPath,
+            outputFilename
+          });
+
+          if (result.error) {
+            throw new McpError(
+              ErrorCode.ExecutionError,
+              result.error
+            );
+          }
+
+          return {
+            text: result.text || 'Image generated successfully',
+            imagePath: result.imagePath,
+            model: model || DEFAULT_CONFIG.defaultModel
+          };
+        } catch (error) {
+          if (error instanceof McpError) {
+            throw error;
           }
           
-          console.log(JSON.stringify({
-            result: {
-              success: true,
-              message: 'Image generated successfully',
-              imagePath: result.imagePath
-            }
-          }));
-        } catch (error) {
-          console.error('Error generating image:', error);
-          console.log(JSON.stringify({
-            result: {
-              success: false,
-              error: error instanceof Error ? error.message : 'Unknown error occurred'
-            }
-          }));
+          throw new McpError(
+            ErrorCode.ExecutionError,
+            error instanceof Error ? error.message : 'Unknown error occurred'
+          );
         }
-        return;
       }
       
-      console.log(`Unknown message type: ${JSON.stringify(message)}`);
-      
-    } catch (error) {
-      console.error('Error processing message:', error);
-    }
-  });
-  
-  // Handle process termination
-  process.on('SIGINT', () => {
-    console.log('MCP server terminating');
-    process.exit(0);
-  });
-  
-  // Log to stderr instead of stdout to avoid interfering with protocol
-  console.log = console.error;
-}
+      return undefined;
+    };
 
-/**
- * Start the MCP server
- */
-export function startServer(port: number = DEFAULT_PORT, host: string = DEFAULT_HOST) {
-  // Create HTTP server for MCP
-  const server = http.createServer(async (req, res) => {
-    const parsedUrl = url.parse(req.url || '', true);
-    
-    // Set CORS headers for all responses
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    
-    // Handle preflight OPTIONS request
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-    
-    // Process MCP request
-    if (req.method === 'POST' || req.method === 'GET') {
-      await handleMCPRequest(req, res);
-    } else {
-      res.writeHead(405, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Method not allowed' }));
-    }
-  });
-  
-  // Start server
-  server.listen(port, host, () => {
-    console.log(`MCP Gemini Image Generator server running at http://${host}:${port}/`);
-    console.log(`Images will be saved to: ${DEFAULT_OUTPUT_DIR}`);
-    
-    // Check if API key is set
-    console.log('📢[index.ts:201]: process.env.GOOGLE_API_KEY: ', process.env.GOOGLE_API_KEY);
-    if (!process.env.GOOGLE_API_KEY) {
-      console.warn('⚠️  Warning: GOOGLE_API_KEY is not set in environment variables');
-      console.warn('Please set your API key in .env or .env.local file');
-    }
-  });
-  
-  return server;
-}
+    // Define context schema
+    this.server.defineContextSchema({
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          description: "The prompt to generate an image from"
+        },
+        model: {
+          type: "string",
+          description: "The model to use for image generation"
+        },
+        outputPath: {
+          type: "string",
+          description: "Directory to save the generated image to"
+        },
+        outputFilename: {
+          type: "string",
+          description: "Filename to save the generated image as"
+        }
+      },
+      required: ["prompt"]
+    });
+  }
 
-// Start the server when this file is executed directly
-if (import.meta.url.endsWith('/index.js') || import.meta.url.endsWith('/index.ts')) {
-  // Check if we're running in stdio mode
-  if (process.argv.includes('--stdio')) {
-    handleStdioMode();
-  } else {
-    startServer();
+  private setupErrorHandling(): void {
+    this.server.onerror = (error) => {
+      console.error("[MCP Error]", error);
+    };
+
+    process.on('SIGINT', async () => {
+      await this.server.close();
+      process.exit(0);
+    });
+  }
+
+  async run(): Promise<void> {
+    const transport = new StdioServerTransport();
+    await this.server.connect(transport);
+    console.log("Gemini Image Generation MCP server running on stdio");
   }
 }
 
-export default { startServer, handleStdioMode };
+async function main() {
+  try {
+    const server = new GeminiImageServer();
+    await server.run();
+  } catch (error) {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  }
+}
+
+// Start the server
+main().catch(err => {
+  console.error('Fatal error:', err);
+  process.exit(1);
+});

@@ -1,261 +1,125 @@
 # MCP Google Gemini Image Generation
 
-A Model Context Protocol (MCP) server that uses Google's Gemini API to generate images from text prompts.
+MCP server for generating images using Google's Gemini API with Context7 integration.
 
 ## Features
 
-- Generate images using Google's Gemini AI models
-- Select from different Gemini models (default: `gemini-2.0-flash-preview-image-generation`)
-- Customize image dimensions
+- Generate images from text prompts using Google Gemini API
 - Save generated images to a specified directory
-- Access via MCP protocol
-- Easy to run with NPX
-- Handles API rate limits gracefully with automatic retries
+- Configure different Gemini models for image generation
+- Context7 integration with sequential thinking capability
+- Supports both programmatic use and CLI interface
 
 ## Installation
 
-You can run this package directly with npx:
+```bash
+npm install -g mcp-google-gemini-image-generation
+```
+
+Or use it directly with npx:
 
 ```bash
 npx mcp-google-gemini-image-generation
 ```
 
-Or install it globally:
-
-```bash
-npm install -g mcp-google-gemini-image-generation
-mcp-gemini-image
-```
-
-## Prerequisites
-
-- Node.js 16 or higher
-- Google API key with access to Gemini API
-
 ## Configuration
 
-Set your Google API key using one of these methods:
-
-1. Environment variable:
-```bash
-export GOOGLE_API_KEY=your_google_api_key_here
-```
-
-2. Create a .env file:
-```
-GOOGLE_API_KEY=your_google_api_key_here
-```
-
-3. Pass as a command line argument:
-```bash
-npx mcp-google-gemini-image-generation --api-key=your_google_api_key_here
-```
-
-## Command Line Options
-
-```
-Options:
-  -V, --version           output the version number
-  -p, --port <number>     Port number for the MCP server (default: "23032")
-  -h, --host <host>       Host for the MCP server (default: "localhost")
-  -o, --output <directory> Directory for saving generated images (default: "./generated-images")
-  -k, --api-key <key>     Google API key (or set GOOGLE_API_KEY env variable)
-  --help                  display help for command
-```
-
-## API Rate Limits
-
-Google Gemini API has certain rate limits that you should be aware of:
-
-1. **Free Tier Limits**:
-   - Limited requests per minute and per day
-   - Limited input tokens per minute
-   - Limited generated content per day
-
-2. **Handling Rate Limits**:
-   - The server automatically implements exponential backoff for retries
-   - Default retry attempts: 3 times with increasing delay
-   - Consider upgrading to a paid tier for higher quotas if you frequently hit limits
-
-3. **Error Handling**:
-   - Rate limit errors (HTTP 429) are properly handled
-   - Descriptive error messages help diagnose quota issues
-
-For more information on Gemini API rate limits, visit: https://ai.google.dev/gemini-api/docs/rate-limits
-
-## Using with VSCode GitHub Copilot or Cursor
-
-To use this MCP server with VSCode GitHub Copilot or Cursor, follow these steps:
-
-### 1. Create the `.vscode` directory in your project
+Create a `.env` file in your project directory (you can copy from `.env.example`):
 
 ```bash
-mkdir -p .vscode
+# Google Gemini API Key
+GEMINI_API_KEY=your_api_key_here
+
+# Output directory for images
+OUTPUT_DIR=./output
+
+# Default model for image generation
+DEFAULT_MODEL=gemini-2.0-flash-preview-image-generation
 ```
 
-### 2. Create a `mcp.json` file in the `.vscode` directory
+## Usage
 
-Create a file at `.vscode/mcp.json` with the following content:
+### Using in VS Code with MCP Extension
+
+1. Make sure you have the MCP Extension installed in VS Code
+2. Add the server to your MCP configuration:
 
 ```json
 {
   "servers": {
-    "GeminiImageGeneration": {
-      "type": "stdio",
+    "gemini-image-generation": {
       "command": "npx",
-      "args": [
-        "mcp-google-gemini-image-generation",
-        "--api-key",
-        "YOUR_GOOGLE_API_KEY_HERE"
-      ]
+      "args": ["-y", "mcp-google-gemini-image-generation"]
     }
   }
 }
 ```
 
-Alternatively, if running locally from the cloned repository:
-
-```json
-{
-  "servers": {
-    "GeminiImageGeneration": {
-      "type": "stdio",
-      "command": "node",
-      "args": [
-        "./dist/index.js"
-      ],
-      "env": {
-        "GOOGLE_API_KEY": "YOUR_GOOGLE_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-### 3. Add mcp configuration in VSCode settings
-
-In VSCode, you can add the following to your settings.json file (Ctrl+Shift+P, then "Preferences: Open Settings (JSON)"):
-
-```json
-"github.copilot.chat.locales": {
-  "mcp": {
-    "GeminiImageGeneration": "gemini-image-generator"
-  }
-}
-```
-
-### 4. Using in Copilot or Cursor
-
-You can then use the MCP server in Copilot or Cursor by prompting it to generate images. For example:
+3. Use it in VS Code by providing context:
 
 ```
-Generate an image of a mountain landscape with a lake using Gemini
+prompt: "Create an image of a dragon flying over a magical forest"
+outputPath: "./images"
+outputFilename: "dragon.png"
+model: "gemini-2.0-flash-preview-image-generation"
 ```
 
-The AI will use your configured MCP server to generate the image based on your prompt.
-
-### 5. Accessing Generated Images
-
-The images will be saved in the configured output directory (default: `./generated-images`). You can access them directly from your filesystem.
-
-## MCP Protocol Usage
-
-Send MCP requests to the server's HTTP endpoint:
-
-### Get Model Properties
-
-```json
-{
-  "lookup": "properties"
-}
-```
-
-### Generate an Image
-
-```json
-{
-  "call": {
-    "context": {
-      "prompt": "a beautiful landscape with mountains and a lake",
-      "model": "gemini-2.0-flash-preview-image-generation",
-      "width": 1024,
-      "height": 1024
-    }
-  }
-}
-```
-
-### Available Context Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| prompt | string | *required* | Text prompt describing the image to generate |
-| model | string | "gemini-2.0-flash-preview-image-generation" | Gemini model to use |
-| width | number | 1024 | Image width in pixels |
-| height | number | 1024 | Image height in pixels |
-| outputDir | string | "./generated-images" | Directory to save images |
-
-## Example Usage with cURL
+### Using with CLI
 
 ```bash
-# Get model properties
-curl -X POST http://localhost:23032 \
-  -H "Content-Type: application/json" \
-  -d '{"lookup": "properties"}'
-
-# Generate an image
-curl -X POST http://localhost:23032 \
-  -H "Content-Type: application/json" \
-  -d '{"call": {"context": {"prompt": "a beautiful landscape with mountains and a lake"}}}'
-
-# Generate an image with HTTP endpoint
-curl -X POST http://localhost:23032/v1/providers/gemini-image-generator/generations \
-  -H "Content-Type: application/json" \
-  -d '{"context": {"prompt": "a beautiful landscape with mountains and a lake"}}'
+npx mcp-google-gemini-image-generation --api-key YOUR_API_KEY --output-dir ./images --model gemini-2.0-flash-preview-image-generation
 ```
 
-## Response Format
+### Using Sequential Thinking
 
-A successful image generation request will return:
+This MCP server includes a sequential thinking tool that helps break down complex image generation tasks:
 
 ```json
 {
-  "result": {
-    "success": true,
-    "message": "Image generated successfully",
-    "imagePath": "/path/to/generated/image.png"
-  }
+  "thoughtNumber": 1,
+  "totalThoughts": 3,
+  "thought": "First, let's consider the key elements needed in this fantasy scene...",
+  "nextThoughtNeeded": true
 }
 ```
 
-An error response will return:
+## API Reference
 
-```json
-{
-  "result": {
-    "success": false,
-    "error": "Error message details"
-  }
-}
-```
+### Context Parameters
 
-## Common Issues and Solutions
+| Parameter | Description | Required | Default |
+|-----------|-------------|----------|---------|
+| prompt | The text prompt to generate an image from | Yes | - |
+| model | The Gemini model to use | No | gemini-2.0-flash-preview-image-generation |
+| outputPath | Directory to save the generated image | No | ./output |
+| outputFilename | Filename for the generated image | No | gemini-image-[uuid].png |
 
-### API Rate Limit Errors
+### Tools
 
-If you encounter a "429 Too Many Requests" error:
+#### generate-image
 
-1. Wait a few minutes before retrying
-2. Consider using a different model 
-3. Upgrade to a paid Google API plan for higher quotas
+Generates an image based on text prompt.
 
-### Image Generation Failures
+Parameters:
+- `prompt` (required): Text description of the image to generate
+- `model`: Name of the Gemini model to use
+- `outputPath`: Directory to save the image
+- `outputFilename`: Custom filename for the generated image
 
-If images are not being generated:
+#### sequential-thinking
 
-1. Ensure your API key has access to the Gemini image generation features
-2. Check that you're using a supported model for image generation
-3. Try simplifying your prompt or reducing image dimensions
+Enables step-by-step complex reasoning for image generation tasks.
+
+Parameters:
+- `thought` (required): Current thinking step
+- `nextThoughtNeeded` (required): Whether another thought step is needed
+- `thoughtNumber` (required): Current thought number
+- `totalThoughts` (required): Estimated total thoughts needed
+- `isRevision`: Whether this revises previous thinking
+- `revisesThought`: Which thought is being reconsidered
+- `branchFromThought`: Branching point thought number
+- `branchId`: Branch identifier
+- `needsMoreThoughts`: If more thoughts are needed
 
 ## License
 

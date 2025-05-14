@@ -1,84 +1,53 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { program } from 'commander';
 import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs-extra';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
-// Load environment variables from .env and .env.local
-dotenv.config();
-// Check if .env.local exists and load it (will override .env values)
-const envLocalPath = path.resolve(process.cwd(), '.env.local');
-if (fs.existsSync(envLocalPath)) {
-  const envLocal = dotenv.parse(fs.readFileSync(envLocalPath));
-  for (const key in envLocal) {
-    process.env[key] = envLocal[key];
-  }
-}
-
-// Get package information
+// For ES modules
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const packageJson = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
-);
+const __dirname = path.dirname(__filename);
+const packagePath = path.join(__dirname, '../package.json');
+const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
 
-// Create CLI program
-const program = new Command();
+// Load environment variables
+dotenv.config();
 
 program
   .name('mcp-gemini-image')
-  .description(packageJson.description)
+  .description('MCP server for Google Gemini image generation')
   .version(packageJson.version)
-  .option('-p, --port <number>', 'Port number for the MCP server', process.env.PORT || '23032')
-  .option('-h, --host <host>', 'Host for the MCP server', process.env.HOST || 'localhost')
-  .option('-o, --output <directory>', 'Directory for saving generated images', process.env.DEFAULT_OUTPUT_DIR || './generated-images')
-  .option('-k, --api-key <key>', 'Google API key (or set GOOGLE_API_KEY env variable)')
-  .option('--stdio', 'Run in stdio mode for integration with editors')
+  .option('-k, --api-key <key>', 'Google Gemini API key')
+  .option('-o, --output-dir <path>', 'Output directory for generated images')
+  .option('-m, --model <model>', 'Default model name')
   .action(async (options) => {
     try {
-      // Set environment variables from options
+      // Set environment variables from options if provided
       if (options.apiKey) {
-        process.env.GOOGLE_API_KEY = options.apiKey;
+        process.env.GEMINI_API_KEY = options.apiKey;
       }
       
-      if (options.output) {
-        process.env.DEFAULT_OUTPUT_DIR = options.output;
+      if (options.outputDir) {
+        process.env.OUTPUT_DIR = options.outputDir;
       }
       
-      // Import our server implementation
-      const { default: server } = await import('../dist/index.js');
-      
-      // Start the server
-      server.startServer(parseInt(options.port), options.host);
-      
-      console.log(chalk.green('✨ MCP Gemini Image Generator is ready!'));
-      console.log(chalk.blue('Example MCP request:'));
-      console.log(chalk.gray(`
-POST http://${options.host}:${options.port}/v1/providers/gemini-image-generator/generations
-
-{
-  "context": {
-    "prompt": "a beautiful landscape with mountains and a lake",
-    "model": "gemini-2.0-flash-preview-image-generation",
-    "width": 1024,
-    "height": 1024
-  }
-}
-      `));
-      
-      // Check if API key is set
-      if (!process.env.GOOGLE_API_KEY) {
-        console.log(chalk.yellow('⚠️  Warning: GOOGLE_API_KEY is not set!'));
-        console.log(chalk.yellow('Please set your API key using the --api-key option or GOOGLE_API_KEY environment variable'));
+      if (options.model) {
+        process.env.DEFAULT_MODEL = options.model;
       }
+      
+      console.log(chalk.green('Starting Gemini Image Generation MCP server...'));
+      
+      // Import the server after setting environment variables
+      await import('../dist/index.js');
+      
+      console.log(chalk.green('Server is running. Press Ctrl+C to stop.'));
     } catch (error) {
       console.error(chalk.red('Error starting server:'), error);
       process.exit(1);
     }
   });
 
-program.parse();
+program.parse(process.argv);

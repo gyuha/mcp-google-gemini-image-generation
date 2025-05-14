@@ -1,34 +1,26 @@
 {
-    "servers": {
-        "Context7": {
-            "type": "stdio",
-            "command": "npx",
-            "args": [
-                "-y",
-                "@upstash/context7-mcp@latest"
-            ]
-        },
-        "server-sequential-thinking": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "@smithery/cli@latest",
-                "run",
-                "@smithery-ai/server-sequential-thinking",
-                "--key",
-                "3532dcf0-1356-4147-bd63-3291b5e72e90"
-            ]
-        },
-        "GeminiImageGeneration": {
-            "type": "stdio",
-            "command": "node",
-            "args": [
-                "${workspaceFolder}/dist/index.js",
-                "--stdio"
-            ],
-            "env": {
-                "GOOGLE_API_KEY": "${env:GOOGLE_API_KEY}"
-            }
-        }
+  "servers": {
+    "Context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "server-sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@smithery-ai/server-sequential-thinking",
+        "--key",
+        "3532dcf0-1356-4147-bd63-3291b5e72e90"
+      ]
+    },
+    "gemini-image-generation": {
+      "type": "stdio",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "cwd": "${workspaceFolder}"
     }
+  }
 }
