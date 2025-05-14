@@ -41,7 +41,8 @@ export class ImageGenerator {
         model,
         contents: prompt,
         config: {
-          responseModalities: [Modality.TEXT, Modality.IMAGE],
+          // 중요 변경: 이미지만 받도록 설정
+          responseModalities: [Modality.IMAGE],
         },
       });
 
@@ -49,6 +50,7 @@ export class ImageGenerator {
       const filename = outputFilename || `gemini-image-${uuidv4().substring(0, 8)}.png`;
       const imagePath = path.join(outputDirectory, filename);
       let textResponse = '';
+      let imageSaved = false;
 
       // Process the response
       if (response.candidates && 
@@ -59,10 +61,13 @@ export class ImageGenerator {
         for (const part of response.candidates[0].content.parts) {
           if (part.text) {
             textResponse = part.text;
-          } else if (part.inlineData && part.inlineData.data) {
+          } else if (part.inlineData && part.inlineData.data && !imageSaved) {
+            // 첫 번째 이미지만 저장
             const imageData = part.inlineData.data;
             const buffer = Buffer.from(imageData, 'base64');
             await fs.writeFile(imagePath, buffer);
+            imageSaved = true;
+            console.log(`Image saved to: ${imagePath}`);
           }
         }
 
